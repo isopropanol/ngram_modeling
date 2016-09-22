@@ -141,7 +141,6 @@ def smoothGoodTuring(bigram):
     cmap = [0]*11
     for c in range(11):
         cmap[c] = (c+1)* Narray[c+1] / Narray[c]
-    print("and the cmap is ", cmap)
 
     # compute adjusted totals
     for k,v in bigram.counts.iteritems():
@@ -214,14 +213,7 @@ def generateUnigramBigram():
         unigrams = collectionIterator(training_file_paths,unigrams)
         bigrams = collectionIterator(training_file_paths,bigrams,unigrams)
 
-        mappedUnigrams = removeUnk(unigrams)
-        # Now post process data for smoothing
-        cmap, mappedBigrams = smoothGoodTuring(bigrams)
-        perplexity = findPerplexity(mappedBigrams, mappedUnigrams, cmap, test_file_paths)
-        print ("and the perplexity is ", perplexity)
-
-        unigramCollection[category] = unigrams
-        bigramCollection[category] = bigrams
+        # Section 3: generate fragments
 
         # print("-------- Unigram ----------")
         # for i in range(15):
@@ -230,6 +222,20 @@ def generateUnigramBigram():
         # print("-------- Bigram ----------")
         # for i in range(15):
         #     print(bigramGenSentence(bigrams, "<s>"))
+
+        # section 4 do good turning and add unknowns
+        mappedUnigrams = removeUnk(unigrams)
+        # Now post process data for smoothing
+        cmap, mappedBigrams = smoothGoodTuring(bigrams)
+
+        # section 5 compute Perplexity
+        perplexity = findPerplexity(mappedBigrams, mappedUnigrams, cmap, test_file_paths)
+        print ("and the perplexity is ", perplexity)
+
+        unigramCollection[category] = mappedUnigrams
+        bigramCollection[category] = mappedBigrams
+        cmaps[category] = cmap
+
 
     return (unigramCollection, bigramCollection)
 
