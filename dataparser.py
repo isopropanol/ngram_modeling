@@ -7,6 +7,8 @@ from nltk.tokenize import sent_tokenize
 from collections import defaultdict
 from random import randint
 import math
+import operator
+
 
 #
 # Classes
@@ -192,11 +194,16 @@ def generateUnigramBigram():
     category_paths =  glob.glob('data_corrected/classification_task/*')
     unigramCollection = {}
     bigramCollection = {}
+    cmapCollection = {}
     # category_paths = [category_paths[0]]
     for category in category_paths:
         # BEGIN iteration over categories
+        category_title = category.split('/')[-1]
+        if category_title == "test_for_classification":
+            # non standard category, don't do this one
+            continue
         print("---")
-        print("------------",category,"------------")
+        print("------------",category_title,"------------")
         print("---")
 
         unigrams = NGram(1)
@@ -232,12 +239,46 @@ def generateUnigramBigram():
         perplexity = findPerplexity(mappedBigrams, mappedUnigrams, cmap, test_file_paths)
         print ("and the perplexity is ", perplexity)
 
-        unigramCollection[category] = mappedUnigrams
-        bigramCollection[category] = mappedBigrams
-        cmaps[category] = cmap
+        unigramCollection[category_title] = mappedUnigrams
+        bigramCollection[category_title] = mappedBigrams
+        cmapCollection[category_title] = cmap
 
 
-    return (unigramCollection, bigramCollection)
+    return (unigramCollection, bigramCollection, cmapCollection)
+
+#
+# Section 6 functions: for classification
+#
+
+def testNgramModel(uCollect, biCollect, cmapCollect):
+    predictions = []
+    test_files_paths = glob.glob('data_corrected/classification_task/test_for_classification/*.txt')
+
+    categories = sorted(uCollect.keys())
+    category_to_id_map = {}
+    for index,category in enumerate(categories):
+        category_to_id_map[category] = index
+
+    text_file = open("kaggle_prediction.csv", "w")
+    text_file.write("Id,Prediction\n")
+
+    for file_path in test_files_paths:
+        perplexity_set = {}
+        for category in categories:
+            perplexity_set[category] = findPerplexity(biCollect[category], uCollect[category], cmapCollect[category], [file_path])
+
+        prediction_category_order = sorted(perplexity_set.items(), key=operator.itemgetter(1))
+        adjusted_file_path = file_path.split("/")[-1]
+        predicted_category, cat_perplex = prediction_category_order[0]
+        category_prediction = [adjusted_file_path, category_to_id_map[predicted_category]]
+        predictions.append(category_prediction)
+        text_file.write(",".join(str(s) for s in category_prediction)+"\n")
+
+    return predictions
+
+
+
+
 
 #
 # Raw Code
@@ -248,4 +289,7 @@ def generateUnigramBigram():
 
 # Initialization
 
-uCollect, biCollect = generateUnigramBigram();
+uCollect, biCollect, cmapCollect = generateUnigramBigram();
+
+# section 6 compute topic classification
+test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
