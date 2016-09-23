@@ -196,7 +196,8 @@ def findPerplexity(bigrams, unigrams, cmap, file_paths):
                 # if bigrams.counts[tokenIdx_1].smoothTotal == 0:
                     # print("uhg it's 0 ", bigrams.counts[tokenIdx_1].smoothTotal)
                     # print("and tk-1 ", tokenIdx_1)
-                logsum -= math.log(readCmap(bigrams.counts[tokenIdx_1].counts[token].total, cmap)/bigrams.counts[tokenIdx_1].smoothTotal)
+                pwgw1 = readCmap(bigrams.counts[tokenIdx_1].counts[token].total, cmap)/bigrams.counts[tokenIdx_1].smoothTotal
+                logsum -= math.log(pwgw1)
                 divisor += 1
 
     return math.exp(1/divisor * logsum);
@@ -224,10 +225,10 @@ def generateUnigramBigram():
         file_paths = glob.glob(category+"/train_docs/*.txt")
         # file_paths = [file_paths[0]]
         # BEGIN iteration over paths
-        twothirdsmark = int(len(file_paths)*2/3)
+        threefourthsmark = int(len(file_paths)*3/4)
 
-        training_file_paths = file_paths[:twothirdsmark]
-        test_file_paths = file_paths[twothirdsmark:]
+        training_file_paths = file_paths[:threefourthsmark]
+        test_file_paths = file_paths[threefourthsmark:]
 
         unigrams = collectionIterator(training_file_paths,unigrams)
         bigrams = collectionIterator(training_file_paths,bigrams,unigrams)
@@ -261,8 +262,45 @@ def generateUnigramBigram():
 #
 # Section 6 functions: for classification
 #
-
 def testNgramModel(uCollect, biCollect, cmapCollect):
+    category_paths =  glob.glob('data_corrected/classification_task/*')
+    categories = sorted(uCollect.keys())
+    category_accuracy = []
+
+    for category in category_paths:
+        accurate = 0
+        inaccurate = 0
+        category_title = category.split('/')[-1]
+        if category_title == "test_for_classification":
+            # non standard category, don't do this one
+            continue
+
+        file_paths = glob.glob(category+"/train_docs/*.txt")
+
+        threefourthsmark = int(len(file_paths)*3/4)
+
+        training_file_paths = file_paths[:threefourthsmark]
+        validation_file_paths = file_paths[threefourthsmark:]
+
+        for file_path in validation_file_paths:
+            perplexity_set = {}
+            for category in categories:
+                perplexity_set[category] = findPerplexity(biCollect[category], uCollect[category], cmapCollect[category], [file_path])
+
+            prediction_category_order = sorted(perplexity_set.items(), key=operator.itemgetter(1))
+            predicted_category, cat_perplex = prediction_category_order[0]
+            if predicted_category == category_title:
+                accurate +=1
+            else:
+                inaccurate +=1
+
+        accuracy = accurate/(accurate+inaccurate)
+        print accuracy
+        category_accuracy.append((category_title, accuracy))
+    return category_accuracy
+
+
+def createTestNgramModelOutput(uCollect, biCollect, cmapCollect):
     predictions = []
     test_files_paths = glob.glob('data_corrected/classification_task/test_for_classification/*.txt')
 
@@ -474,23 +512,24 @@ def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_
 
 # Initialization
 # sections 1-5 are iterated through generateUnigramBigram
-# uCollect, biCollect, cmapCollect = generateUnigramBigram();
+uCollect, biCollect, cmapCollect = generateUnigramBigram();
 
 # section 6 compute topic classification
-# test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
+test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
 
 
 # section 7
 # NOTE: we only want letters here, so we can remove all punctuation.  We can also just look at lower case forms, something we should implement for the previous case as well.
 # General approach: train bigrams for both sides of the word?
-spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')
-if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
 
-confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
-confusion_set_check = defaultdict(set)
-for word_set in confusion_set:
-    confusion_set_check[word_set[0]].add(word_set[1])
-    confusion_set_check[word_set[1]].add(word_set[0])
-sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
+# spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')
+# if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
 #
-check_speck_check(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
+# confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
+# confusion_set_check = defaultdict(set)
+# for word_set in confusion_set:
+#     confusion_set_check[word_set[0]].add(word_set[1])
+#     confusion_set_check[word_set[1]].add(word_set[0])
+# sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
+
+# check_speck_check(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
