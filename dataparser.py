@@ -379,15 +379,14 @@ def generateSpellcheckSet(confusion_set_check, spellcheck_category_paths):
         sp_bigram_col[category_title] = (sp_bigram, sp_bigram_after)
     return sp_bigram_col
 
-def guessSPWord(word1, wordOptions, sp_gram, sp_gram_after):
+def guessSPWord(word1, wordOptions, sp_gram, sp_gram_after, after_scalar):
     word = word1
-    after_scalar = 1
     for word2 in wordOptions:
-        if (sp_gram.counts[word2].total + after_scalar*sp_gram_after.counts[word2].total) > (sp_gram.counts[word].total + sp_gram_after.counts[word].total):
+        if (sp_gram.counts[word2].total + after_scalar*sp_gram_after.counts[word2].total) > (sp_gram.counts[word].total + after_scalar*sp_gram_after.counts[word].total):
             word = word2
     return word
 
-def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_col):
+def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_col, after_scalar):
     accuracies = {}
     for sc_category_path in spellcheck_category_paths:
         category_title = sc_category_path.split('/')[-1]
@@ -451,7 +450,11 @@ def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_
                     if idx != len(tokens)-1:
                         tokenIdx_p1_mod = tokens_mod[idx+1]
 
-                    word_guess = guessSPWord(token_mod, confusion_set_check[token_mod], sp_bigram.counts[tokenIdx_1_mod], sp_bigram_after.counts[tokenIdx_p1_mod])
+                    a_scalar = after_scalar
+                    if tokenIdx_p1_mod in confusion_set_check:
+                        a_scalar = 0
+
+                    word_guess = guessSPWord(token_mod, confusion_set_check[token_mod], sp_bigram.counts[tokenIdx_1_mod], sp_bigram_after.counts[tokenIdx_p1_mod], a_scalar)
                     sentence_guesses[idx] = word_guess
 
                     if word_guess == token:
@@ -476,6 +479,7 @@ def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_
 # section 6 compute topic classification
 # test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
 
+
 # section 7
 # NOTE: we only want letters here, so we can remove all punctuation.  We can also just look at lower case forms, something we should implement for the previous case as well.
 # General approach: train bigrams for both sides of the word?
@@ -489,4 +493,4 @@ for word_set in confusion_set:
     confusion_set_check[word_set[1]].add(word_set[0])
 sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
 #
-check_speck_check(confusion_set_check,spellcheck_category_paths, sp_bigram_col)
+check_speck_check(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
