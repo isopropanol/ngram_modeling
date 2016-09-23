@@ -32,6 +32,18 @@ class NGram:
             # continue adding the rest of the words through layers of the nGram
             self.counts[words[0]].add(words[1:])
         self.total +=1
+class SPNGram(NGram):
+    def __init__(self, depth=1):
+        NGram.__init__(self,depth)
+        self.counts = defaultdict(SPNGram)
+    def sub(self,words):
+        # This is for negative counts in spell checking
+        if self.depth == 1:
+            self.counts[words[0]].total -=1
+        else:
+            # continue adding the rest of the words through layers of the nGram
+            self.counts[words[0]].sub(words[1:])
+        self.total +=1
 #
 # Functions
 #
@@ -49,7 +61,7 @@ def stringPreprocessor(string):
     chars = ' [^a-zA-Z\d\s:!(.\!?)]|\> | \<'
 
     regex = re.compile('(' + email_regex + '|' + chars + ')', re.VERBOSE)
-    return re.sub(regex, '', string)
+    return re.sub(regex, '', string.lower())
 
 #
 # Loops over files to read, for bigrams replaces count 1 tokens with <unk> via readToken
@@ -276,9 +288,172 @@ def testNgramModel(uCollect, biCollect, cmapCollect):
 
     return predictions
 
+#
+# Section 7 functions: for spell checking
+#
+# read confusion set from file
+def getConfusionSet(file_path):
+    text_file = open(file_path, "r")
+    lines = text_file.read().decode("utf-8-sig").encode("utf-8").splitlines()
+    return [[x for x in line.strip().split(" ") if x] for line in lines]
+
+# generate forward bigrams
+def generateSpellcheckSet(confusion_set_check, spellcheck_category_paths):
+    sp_bigram_col = {}
+
+    for sc_category_path in spellcheck_category_paths:
+        category_title = sc_category_path.split('/')[-1]
 
 
+        file_paths = glob.glob(sc_category_path+"/train_docs/*.txt")
 
+        sp_bigram = SPNGram(2)
+        sp_bigram_after = SPNGram(2)
+
+        threefourthsmark = int(len(file_paths)*3/4)
+
+        training_file_paths = file_paths[:threefourthsmark]
+        validation_file_paths = file_paths[threefourthsmark:]
+
+        for index,path in enumerate(training_file_paths):
+            raw = open(path, 'r').read()
+            path_list = path.split("/")
+            path_list_split = path_list[-1].split(".")
+            path_list_split[0] += "_modified"
+            path_list[-2] = "train_modified_docs"
+            path_list[-1] = ".".join(path_list_split)
+            path_mod = "/".join(path_list)
+            raw_mod = open(path_mod,'r').read()
+            processed_file = filePreprocessor(raw)
+            processed_file_mod = filePreprocessor(raw_mod)
+
+            sen_tokens = sent_tokenize(processed_file)
+            sen_tokens_mod = sent_tokenize(processed_file_mod)
+
+            for i,sen in enumerate(sen_tokens):
+                # might need to point </s> to <s> for bigrams
+
+                sentence = stringPreprocessor(sen)
+                sentence_mod = stringPreprocessor(sen_tokens_mod[i])
+
+                tokens = word_tokenize(sentence)
+                tokens_mod = word_tokenize(sentence_mod)
+
+                # print tokens
+                # print "----------------\n"
+                # print tokens_mod
+
+                for idx, token in enumerate(tokens):
+                    token_mod = tokens_mod[idx]
+
+                    if token == token_mod:
+                        # this word is not in the confusion set and we don't care about it
+                        continue
+
+
+                    tokenIdx_1 = "<s>"
+                    tokenIdx_1_mod = "<s>"
+                    if idx != 0:
+                        # print(idx)
+                        tokenIdx_1 = tokens[idx-1]
+                        tokenIdx_1_mod = tokens_mod[idx-1]
+                        if tokenIdx_1_mod != tokenIdx_1:
+                            # replace the wrong word with the right word for n-1
+                            tokenIdx_1_mod = tokenIdx_1
+
+                    # tokenIdx_p1 = "</s>"
+                    # tokenIdx_p1_mod = "</s>"
+                    # if idx != len(tokens)-1:
+                    #     tokenIdx_p1 = tokens[idx+1]
+                    #     tokenIdx_p1_mod = tokens_mod[idx+1]
+                    #     if tokenIdx_p1 in confusion_set_check:
+                    #         # replace the wrong word with the right word for n+1
+                    #         tokenIdx_p1_mod = confusion_set_check[tokenIdx_p1_mod]
+
+                    sp_bigram.add([tokenIdx_1,token])
+                    sp_bigram.sub([tokenIdx_1,token_mod])
+
+
+        sp_bigram_col[category_title] = sp_bigram
+    return sp_bigram_col
+
+def guessSPWord(word1, wordOptions, sp_gram):
+    word = word1
+    for word2 in wordOptions:
+        if sp_gram.counts[word2].total > sp_gram.counts[word1].total:
+            word = word2
+    return word
+
+def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_col):
+    accuracies = {}
+    for sc_category_path in spellcheck_category_paths:
+        category_title = sc_category_path.split('/')[-1]
+
+
+        file_paths = glob.glob(sc_category_path+"/train_docs/*.txt")
+        twothirdsmark = int(len(file_paths)*2/3)
+
+        training_file_paths = file_paths[:twothirdsmark]
+        validation_file_paths = file_paths[twothirdsmark:]
+
+        sp_bigram = sp_bigram_col[category_title]
+        category_accuracy= 0
+        category_inaccuracy = 0
+
+        for index,path in enumerate(validation_file_paths):
+            raw = open(path, 'r').read()
+            path_list = path.split("/")
+            path_list_split = path_list[-1].split(".")
+            path_list_split[0] += "_modified"
+            path_list[-2] = "train_modified_docs"
+            path_list[-1] = ".".join(path_list_split)
+            path_mod = "/".join(path_list)
+            raw_mod = open(path_mod,'r').read()
+            processed_file = filePreprocessor(raw)
+            processed_file_mod = filePreprocessor(raw_mod)
+
+            sen_tokens = sent_tokenize(processed_file)
+            sen_tokens_mod = sent_tokenize(processed_file_mod)
+
+            for i,sen in enumerate(sen_tokens):
+
+                sentence = stringPreprocessor(sen)
+                sentence_mod = stringPreprocessor(sen_tokens_mod[i])
+
+                tokens = word_tokenize(sentence)
+                tokens_mod = word_tokenize(sentence_mod)
+
+                # print tokens
+                # print "----------------\n"
+                # print tokens_mod
+                sentence_guesses = {}
+                for idx, token in enumerate(tokens):
+                    token_mod = tokens_mod[idx]
+
+                    if token == token_mod:
+                        # this word is not in the confusion set and we don't care about it
+                        continue
+
+
+                    tokenIdx_1 = "<s>"
+                    tokenIdx_1_mod = "<s>"
+                    if idx != 0:
+                        tokenIdx_1 = tokens[idx-1]
+                        tokenIdx_1_mod = tokens_mod[idx-1]
+                        if tokenIdx_1 != tokenIdx_1_mod:
+                            # replace the wrong word with the right word for n-1
+                            tokenIdx_1_mod = sentence_guesses[idx-1]
+
+                    word_guess = guessSPWord(token_mod, confusion_set_check[token_mod], sp_bigram.counts[tokenIdx_1_mod])
+                    sentence_guesses[idx] = word_guess
+
+                    if word_guess == token:
+                        category_accuracy +=1
+                    else:
+                        category_inaccuracy +=1
+        accuracies[category_title] = category_accuracy/(category_accuracy+category_inaccuracy)
+    print accuracies
+    return accuracies
 
 #
 # Raw Code
@@ -288,8 +463,23 @@ def testNgramModel(uCollect, biCollect, cmapCollect):
 # nltk.download('punkt')
 
 # Initialization
-
-uCollect, biCollect, cmapCollect = generateUnigramBigram();
+# sections 1-5 are iterated through generateUnigramBigram
+# uCollect, biCollect, cmapCollect = generateUnigramBigram();
 
 # section 6 compute topic classification
-test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
+# test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
+
+# section 7
+# NOTE: we only want letters here, so we can remove all punctuation.  We can also just look at lower case forms, something we should implement for the previous case as well.
+# General approach: train bigrams for both sides of the word?
+spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')[:1]
+if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
+
+confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
+confusion_set_check = defaultdict(set)
+for word_set in confusion_set:
+    confusion_set_check[word_set[0]].update(word_set[1])
+    confusion_set_check[word_set[1]].update(word_set[0])
+sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
+
+check_speck_check(confusion_set_check,spellcheck_category_paths, sp_bigram_col)
