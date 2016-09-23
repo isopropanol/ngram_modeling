@@ -361,14 +361,14 @@ def generateSpellcheckSet(confusion_set_check, spellcheck_category_paths):
                             # replace the wrong word with the right word for n-1
                             tokenIdx_1_mod = tokenIdx_1
 
-                    # tokenIdx_p1 = "</s>"
-                    # tokenIdx_p1_mod = "</s>"
-                    # if idx != len(tokens)-1:
-                    #     tokenIdx_p1 = tokens[idx+1]
-                    #     tokenIdx_p1_mod = tokens_mod[idx+1]
-                    #     if tokenIdx_p1 in confusion_set_check:
-                    #         # replace the wrong word with the right word for n+1
-                    #         tokenIdx_p1_mod = confusion_set_check[tokenIdx_p1_mod]
+                    tokenIdx_p1 = "</s>"
+                    tokenIdx_p1_mod = "</s>"
+                    if idx != len(tokens)-1:
+                        tokenIdx_p1 = tokens[idx+1]
+                        tokenIdx_p1_mod = tokens_mod[idx+1]
+                        if tokenIdx_p1_mod != tokenIdx_p1:
+                            # replace the wrong word with the right word for n+1
+                            tokenIdx_p1_mod = tokenIdx_p1
 
                     sp_bigram.add([tokenIdx_1,token])
                     sp_bigram.sub([tokenIdx_1,token_mod])
@@ -380,7 +380,7 @@ def generateSpellcheckSet(confusion_set_check, spellcheck_category_paths):
 def guessSPWord(word1, wordOptions, sp_gram):
     word = word1
     for word2 in wordOptions:
-        if sp_gram.counts[word2].total > sp_gram.counts[word1].total:
+        if sp_gram.counts[word2].total > sp_gram.counts[word].total:
             word = word2
     return word
 
@@ -472,14 +472,14 @@ def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_
 # section 7
 # NOTE: we only want letters here, so we can remove all punctuation.  We can also just look at lower case forms, something we should implement for the previous case as well.
 # General approach: train bigrams for both sides of the word?
-spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')[:1]
+spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')
 if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
 
 confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
 confusion_set_check = defaultdict(set)
 for word_set in confusion_set:
-    confusion_set_check[word_set[0]].update(word_set[1])
-    confusion_set_check[word_set[1]].update(word_set[0])
+    confusion_set_check[word_set[0]].add(word_set[1])
+    confusion_set_check[word_set[1]].add(word_set[0])
 sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
-
+#
 check_speck_check(confusion_set_check,spellcheck_category_paths, sp_bigram_col)
