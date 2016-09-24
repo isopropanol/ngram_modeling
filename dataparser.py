@@ -145,19 +145,24 @@ def readCmap(count, cmap):
     else:
         return cmap[count]
 
-def smoothGoodTuring(bigram):
+def smoothGoodTuring(bigram, katzk):
     vocab_size = len(bigram.counts)
     # N0 = V^2 - N
-    Narray = [0]*12
+    Narray = [0]*(katzk+2)
     Narray[0] = vocab_size * vocab_size - bigram.total
     for k,v in bigram.counts.iteritems():
         for k2, v2 in v.counts.iteritems():
-            if v2.total < 12:
+            if v2.total < (katzk+2):
                 Narray[v2.total] += v2.total
 
-    cmap = [0]*11
-    for c in range(11):
-        cmap[c] = (c+1)* Narray[c+1] / Narray[c]
+    cmap = {}
+    cmap[0] = Narray[1] / Narray[0]
+    c = 1
+    while c <= katzk:
+        # NOTE: below is the Katz adjusted formula commented out. one must toggle the two lines to get it
+        # cmap[c] = ((c+1)* Narray[c+1] / Narray[c] - c*(katzk+1)*Narray[katzk+1]/Narray[1] ) / (1- (katzk+1)*Narray[katzk+1]/Narray[1])
+        cmap[c] = (c+1)* Narray[c+1]/Narray[c]
+        c +=1
 
     # compute adjusted totals
     for k,v in bigram.counts.iteritems():
@@ -247,7 +252,7 @@ def generateUnigramBigram():
         # section 4 do good turning and add unknowns
         mappedUnigrams = removeUnk(unigrams)
         # Now post process data for smoothing
-        cmap, mappedBigrams = smoothGoodTuring(bigrams)
+        cmap, mappedBigrams = smoothGoodTuring(bigrams, 10)
 
         # section 5 compute Perplexity
         uni_perplexity, bi_perplexity = findPerplexity(mappedBigrams, mappedUnigrams, cmap, test_file_paths, True)
@@ -296,7 +301,7 @@ def testNgramModel(uCollect, biCollect, cmapCollect):
                 inaccurate +=1
 
         accuracy = accurate/(accurate+inaccurate)
-        print accuracy
+        print(category_title+ " accuracy, "+ str(accuracy))
         category_accuracy.append((category_title, accuracy))
     return category_accuracy
 
@@ -497,8 +502,10 @@ def checkSpellCheck(confusion_set_check, spellcheck_category_paths, sp_bigram_co
                         category_accuracy +=1
                     else:
                         category_inaccuracy +=1
-        accuracies[category_title] = category_accuracy/(category_accuracy+category_inaccuracy)
-    print accuracies
+        accuracy = category_accuracy/(category_accuracy+category_inaccuracy)
+        accuracies[category_title] = accuracy
+        print(category_title+ " accuracy: "+ str(accuracy))
+
     return accuracies
 
 def testDataSpellCheck(confusion_set_check, spellcheck_category_paths, sp_bigram_col, after_scalar):
