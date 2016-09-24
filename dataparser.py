@@ -48,7 +48,7 @@ class SPNGram(NGram):
 # Functions
 #
 def filePreprocessor(string):
-    # Remove text up to and including these strings;
+    # Remove text up to and including these strings
     removeTokens = ["From :", "Re :", "Subject :", "write :", "wrote :"]
     for token in removeTokens:
         string = string.split(token)[-1]
@@ -87,7 +87,7 @@ def collectionIterator(file_paths,ngrams, unigrams=False):
                     ngrams.add([tokenIdx_1,token])
                 else:
                     ngrams.add([token])
-    return ngrams;
+    return ngrams
 
 def readToken(token, unigrams):
     if unigrams.counts[token].total > 1:
@@ -173,8 +173,9 @@ def smoothGoodTuring(bigram):
 
 #
 # Computational Functions
-def findPerplexity(bigrams, unigrams, cmap, file_paths):
-    logsum = 0
+def findPerplexity(bigrams, unigrams, cmap, file_paths, include_unigram=False):
+    unilogsum = 0
+    bilogsum = 0
     divisor = 0
     for path in file_paths:
         # print ("Now reading %s", path)
@@ -196,11 +197,15 @@ def findPerplexity(bigrams, unigrams, cmap, file_paths):
                 # if bigrams.counts[tokenIdx_1].smoothTotal == 0:
                     # print("uhg it's 0 ", bigrams.counts[tokenIdx_1].smoothTotal)
                     # print("and tk-1 ", tokenIdx_1)
-                pwgw1 = readCmap(bigrams.counts[tokenIdx_1].counts[token].total, cmap)/bigrams.counts[tokenIdx_1].smoothTotal
-                logsum -= math.log(pwgw1)
+                unipwgw1 = unigrams.counts[token].total/unigrams.total
+                unilogsum -= math.log(unipwgw1)
+                bipwgw1 = readCmap(bigrams.counts[tokenIdx_1].counts[token].total, cmap)/bigrams.counts[tokenIdx_1].smoothTotal
+                bilogsum -= math.log(bipwgw1)
                 divisor += 1
-
-    return math.exp(1/divisor * logsum);
+    if include_unigram:
+        return (math.exp(1/divisor * unilogsum),math.exp(1/divisor * bilogsum))
+    else:
+        return math.exp(1/divisor * bilogsum)
 
 
 def generateUnigramBigram():
@@ -249,8 +254,8 @@ def generateUnigramBigram():
         cmap, mappedBigrams = smoothGoodTuring(bigrams)
 
         # section 5 compute Perplexity
-        perplexity = findPerplexity(mappedBigrams, mappedUnigrams, cmap, test_file_paths)
-        print ("and the perplexity is ", perplexity)
+        uni_perplexity, bi_perplexity = findPerplexity(mappedBigrams, mappedUnigrams, cmap, test_file_paths, True)
+        print ("and the perplexity is ", uni_perplexity,bi_perplexity)
 
         unigramCollection[category_title] = mappedUnigrams
         bigramCollection[category_title] = mappedBigrams
@@ -580,7 +585,7 @@ def testDataSpellCheck(confusion_set_check, spellcheck_category_paths, sp_bigram
 
 # Initialization
 # sections 1-5 are iterated through generateUnigramBigram
-# uCollect, biCollect, cmapCollect = generateUnigramBigram();
+uCollect, biCollect, cmapCollect = generateUnigramBigram()
 
 # section 6 compute topic classification
 # test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
@@ -590,15 +595,15 @@ def testDataSpellCheck(confusion_set_check, spellcheck_category_paths, sp_bigram
 # NOTE: we only want letters here, so we can remove all punctuation.  We can also just look at lower case forms, something we should implement for the previous case as well.
 # General approach: train bigrams for both sides of the word?
 
-spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')
-if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
-
-confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
-confusion_set_check = defaultdict(set)
-for word_set in confusion_set:
-    confusion_set_check[word_set[0]].add(word_set[1])
-    confusion_set_check[word_set[1]].add(word_set[0])
-sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
-
-# checkSpellCheck(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
-testDataSpellCheck(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
+# spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')
+# if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
+#
+# confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
+# confusion_set_check = defaultdict(set)
+# for word_set in confusion_set:
+#     confusion_set_check[word_set[0]].add(word_set[1])
+#     confusion_set_check[word_set[1]].add(word_set[0])
+# sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
+#
+# # checkSpellCheck(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
+# testDataSpellCheck(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
