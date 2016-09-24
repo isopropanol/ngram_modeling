@@ -424,7 +424,7 @@ def guessSPWord(word1, wordOptions, sp_gram, sp_gram_after, after_scalar):
             word = word2
     return word
 
-def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_col, after_scalar):
+def checkSpellCheck(confusion_set_check, spellcheck_category_paths, sp_bigram_col, after_scalar):
     accuracies = {}
     for sc_category_path in spellcheck_category_paths:
         category_title = sc_category_path.split('/')[-1]
@@ -463,9 +463,6 @@ def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_
                 tokens = word_tokenize(sentence)
                 tokens_mod = word_tokenize(sentence_mod)
 
-                # print tokens
-                # print "----------------\n"
-                # print tokens_mod
                 sentence_guesses = {}
                 for idx, token in enumerate(tokens):
                     token_mod = tokens_mod[idx]
@@ -503,6 +500,77 @@ def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_
     print accuracies
     return accuracies
 
+def testDataSpellCheck(confusion_set_check, spellcheck_category_paths, sp_bigram_col, after_scalar):
+    accuracies = {}
+    for sc_category_path in spellcheck_category_paths:
+        category_title = sc_category_path.split('/')[-1]
+
+
+        file_paths = glob.glob(sc_category_path+"/test_modified_docs/*.txt")
+
+        sp_bigram, sp_bigram_after = sp_bigram_col[category_title]
+
+        for index,path in enumerate(file_paths):
+            raw = open(path, 'r').read()
+            path_list = path.split("/")
+            path_list_split = path_list[-1].split(".")
+            path_list_split[0] = "_".join(path_list_split[0].split("_")[:-1])
+            path_list[-2] = "test_docs"
+            path_list[-1] = ".".join(path_list_split)
+            path_mod = "/".join(path_list)
+            output = open(path_mod,'w')
+
+            sen_tokens = sent_tokenize(raw)
+            edits = []
+
+            for i,sen in enumerate(sen_tokens):
+
+                sentence = stringPreprocessor(sen)
+
+                tokens = word_tokenize(sentence)
+
+                for idx, token in enumerate(tokens):
+
+                    if token not in confusion_set_check:
+                        # this word is not in the confusion set and we don't care about it
+                        continue
+
+
+                    tokenIdx_1 = "<s>"
+                    if idx != 0:
+                        tokenIdx_1 = tokens[idx-1]
+
+                    tokenIdx_p1 = "</s>"
+                    if idx != len(tokens)-1:
+                        tokenIdx_p1= tokens[idx+1]
+
+                    a_scalar = after_scalar
+                    if tokenIdx_p1 in confusion_set_check:
+                        a_scalar = 0
+
+                    word_guess = guessSPWord(token, confusion_set_check[token], sp_bigram.counts[tokenIdx_1], sp_bigram_after.counts[tokenIdx_p1], a_scalar)
+
+                    edits.append((token, word_guess))
+
+                    tokens[idx] = word_guess
+
+            raw_array = raw.split(" ")
+            edit_index = 0
+            word, replacement = edits[edit_index]
+            for write_idx,tken in enumerate(raw_array):
+                # print("looking at token "+tken +" comparing to edit: "+word)
+                if tken.lower() == word:
+                    if tken.isupper():
+                        raw_array[write_idx] = replacement.capitalize()
+                    else:
+                        raw_array[write_idx] = replacement
+
+                    edit_index +=1
+                if edit_index >= len(edits):
+                    break
+                word, replacement = edits[edit_index]
+            output.write(" ".join(raw_array))
+            output.close()
 #
 # Raw Code
 #
@@ -512,24 +580,25 @@ def check_speck_check(confusion_set_check, spellcheck_category_paths, sp_bigram_
 
 # Initialization
 # sections 1-5 are iterated through generateUnigramBigram
-uCollect, biCollect, cmapCollect = generateUnigramBigram();
+# uCollect, biCollect, cmapCollect = generateUnigramBigram();
 
 # section 6 compute topic classification
-test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
+# test_predictions = testNgramModel(uCollect, biCollect, cmapCollect)
 
 
 # section 7
 # NOTE: we only want letters here, so we can remove all punctuation.  We can also just look at lower case forms, something we should implement for the previous case as well.
 # General approach: train bigrams for both sides of the word?
 
-# spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')
-# if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
-#
-# confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
-# confusion_set_check = defaultdict(set)
-# for word_set in confusion_set:
-#     confusion_set_check[word_set[0]].add(word_set[1])
-#     confusion_set_check[word_set[1]].add(word_set[0])
-# sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
+spellcheck_category_paths =  glob.glob('data_corrected/spell_checking_task/*')
+if 'data_corrected/spell_checking_task/confusion_set.txt' in spellcheck_category_paths: spellcheck_category_paths.remove('data_corrected/spell_checking_task/confusion_set.txt')
 
-# check_speck_check(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
+confusion_set = getConfusionSet('data_corrected/spell_checking_task/confusion_set.txt')
+confusion_set_check = defaultdict(set)
+for word_set in confusion_set:
+    confusion_set_check[word_set[0]].add(word_set[1])
+    confusion_set_check[word_set[1]].add(word_set[0])
+sp_bigram_col = generateSpellcheckSet(confusion_set_check, spellcheck_category_paths)
+
+# checkSpellCheck(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
+testDataSpellCheck(confusion_set_check,spellcheck_category_paths, sp_bigram_col, 5)
